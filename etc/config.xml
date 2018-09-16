@@ -11,14 +11,14 @@
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
     <default>
         <carriers>
-            <magedin_frenet>
+            <magedinfrenet>
                 <active>0</active>
                 <sallowspecific>0</sallowspecific>
                 <model>MagedIn\Frenet\Model\Shipping\Carrier</model>
                 <name>frenet</name>
                 <title>Frenet</title>
                 <specificerrmsg>This shipping method is not available.</specificerrmsg>
-            </magedin_frenet>
+            </magedinfrenet>
         </carriers>
     </default>
 </config>

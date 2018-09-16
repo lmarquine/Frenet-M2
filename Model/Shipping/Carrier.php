@@ -9,123 +9,292 @@
 
 namespace MagedIn\Frenet\Model\Shipping;
 
+use Magento\Framework\Module\Dir;
+use Magento\Framework\Xml\Security;
 use Magento\Quote\Model\Quote\Address\RateRequest;
+use Magento\Setup\Exception;
+use Magento\Shipping\Model\Rate\Result;
 
-class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrier implements
-    \Magento\Shipping\Model\Carrier\CarrierInterface
+class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
+    implements \Magento\Shipping\Model\Carrier\CarrierInterface
 {
     /**
+     * Code of the carrier
+     *
      * @var string
      */
-    protected $_code = 'magedin_frenet';
+    protected $_code = 'magedinfrenet';
 
     /**
-     * @var bool
+     * Rate result data
+     *
+     * @var Result|null
      */
-    protected $_isFixed = true;
+    protected $_result = null;
+
+    /**
+     * @var \Magento\Catalog\Model\ProductRepository
+     */
+    protected $_productRepository;
+
+    /**
+     * @var \Magento\Framework\HTTP\ZendClientFactory
+     */
+    protected $_zendClientFactory;
 
     /**
      * @var \Magento\Shipping\Model\Rate\ResultFactory
      */
-    protected $_rateResultFactory;
+    protected $_rateFactory;
+
 
     /**
-     * @var \Magento\Quote\Model\Quote\Address\RateResult\MethodFactory
-     */
-    protected $_rateMethodFactory;
-
-    /**
+     * Carrier constructor.
+     *
+     * @param \Magento\Catalog\Model\ProductRepository $productRepository
+     * @param \Magento\Framework\HTTP\ZendClientFactory $zendClientFactory
      * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
      * @param \Magento\Quote\Model\Quote\Address\RateResult\ErrorFactory $rateErrorFactory
      * @param \Psr\Log\LoggerInterface $logger
-     * @param \Magento\Shipping\Model\Rate\ResultFactory $rateResultFactory
+     * @param Security $xmlSecurity
+     * @param \Magento\Shipping\Model\Simplexml\ElementFactory $xmlElFactory
+     * @param \Magento\Shipping\Model\Rate\ResultFactory $rateFactory
      * @param \Magento\Quote\Model\Quote\Address\RateResult\MethodFactory $rateMethodFactory
+     * @param \Magento\Shipping\Model\Tracking\ResultFactory $trackFactory
+     * @param \Magento\Shipping\Model\Tracking\Result\ErrorFactory $trackErrorFactory
+     * @param \Magento\Shipping\Model\Tracking\Result\StatusFactory $trackStatusFactory
+     * @param \Magento\Directory\Model\RegionFactory $regionFactory
+     * @param \Magento\Directory\Model\CountryFactory $countryFactory
+     * @param \Magento\Directory\Model\CurrencyFactory $currencyFactory
+     * @param \Magento\Directory\Helper\Data $directoryData
+     * @param \Magento\CatalogInventory\Api\StockRegistryInterface $stockRegistry
+     * @param Dir\Reader $configReader
+     * @param \Magento\Catalog\Model\ResourceModel\Product\CollectionFactory $productCollectionFactory
      * @param array $data
      */
     public function __construct(
+        \Magento\Catalog\Model\ProductRepository $productRepository,
+        \Magento\Framework\HTTP\ZendClientFactory $zendClientFactory,
         \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
         \Magento\Quote\Model\Quote\Address\RateResult\ErrorFactory $rateErrorFactory,
         \Psr\Log\LoggerInterface $logger,
-        \Magento\Shipping\Model\Rate\ResultFactory $rateResultFactory,
+        Security $xmlSecurity,
+        \Magento\Shipping\Model\Simplexml\ElementFactory $xmlElFactory,
+        \Magento\Shipping\Model\Rate\ResultFactory $rateFactory,
         \Magento\Quote\Model\Quote\Address\RateResult\MethodFactory $rateMethodFactory,
+        \Magento\Shipping\Model\Tracking\ResultFactory $trackFactory,
+        \Magento\Shipping\Model\Tracking\Result\ErrorFactory $trackErrorFactory,
+        \Magento\Shipping\Model\Tracking\Result\StatusFactory $trackStatusFactory,
+        \Magento\Directory\Model\RegionFactory $regionFactory,
+        \Magento\Directory\Model\CountryFactory $countryFactory,
+        \Magento\Directory\Model\CurrencyFactory $currencyFactory,
+        \Magento\Directory\Helper\Data $directoryData,
+        \Magento\CatalogInventory\Api\StockRegistryInterface $stockRegistry,
+        \Magento\Framework\Module\Dir\Reader $configReader,
+        \Magento\Catalog\Model\ResourceModel\Product\CollectionFactory $productCollectionFactory,
         array $data = []
     ) {
-        $this->_rateResultFactory = $rateResultFactory;
-        $this->_rateMethodFactory = $rateMethodFactory;
-        parent::__construct($scopeConfig, $rateErrorFactory, $logger, $data);
+        $this->_productRepository = $productRepository;
+        $this->_zendClientFactory = $zendClientFactory;
+        $this->_rateFactory       = $rateFactory;
+
+        parent::__construct(
+            $scopeConfig,
+            $rateErrorFactory,
+            $logger,
+            $xmlSecurity,
+            $xmlElFactory,
+            $rateFactory,
+            $rateMethodFactory,
+            $trackFactory,
+            $trackErrorFactory,
+            $trackStatusFactory,
+            $regionFactory,
+            $countryFactory,
+            $currencyFactory,
+            $directoryData,
+            $stockRegistry,
+            $data
+        );
     }
 
+
     /**
-     * FreeShipping Rates Collector
+     * Processing additional validation to check if carrier applicable.
      *
+     * @param \Magento\Framework\DataObject $request
+     * @return $this|bool|\Magento\Framework\DataObject
+     */
+    public function proccessAdditionalValidation(\Magento\Framework\DataObject $request)
+    {
+        /**
+         * @todo logic
+         * verify: quote items, destination postcode, origin postcode, Frenet Token, etc...
+         */
+
+        return $this;
+    }
+
+
+    /**
      * @param RateRequest $request
-     * @return \Magento\Shipping\Model\Rate\Result|bool
+     * @return bool|\Magento\Framework\DataObject|\Magento\Quote\Model\Quote\Address\RateResult\Error|Result|null
+     * @throws \Magento\Framework\Exception\NoSuchEntityException
      */
     public function collectRates(RateRequest $request)
     {
-        if (!$this->getConfigFlag('active')) {
-            return false;
+        if (!$this->canCollectRates()) {
+            return $this->getErrorMessage();
         }
 
-        /** @var \Magento\Shipping\Model\Rate\Result $result */
-        $result = $this->_rateResultFactory->create();
+        $this->_prepareRequest($request);
+        $this->_getQuotes();
 
-        $this->_updateFreeMethodQuote($request);
+        return $this->_result;
+    }
 
-        if ($request->getFreeShipping() || $request->getBaseSubtotalInclTax() >= $this->getConfigData(
-                'free_shipping_subtotal'
-            )
-        ) {
-            /** @var \Magento\Quote\Model\Quote\Address\RateResult\Method $method */
-            $method = $this->_rateMethodFactory->create();
 
-            $method->setCarrier('magedin_frenet');
-            $method->setCarrierTitle($this->getConfigData('title'));
+    /**
+     * @todo refactor this method (move to a separated class), get dynamic data and improve logic
+     *
+     * @param $request
+     * @throws \Magento\Framework\Exception\NoSuchEntityException
+     */
+    protected function _prepareRequest($request)
+    {
+        $items       = [];
+        $totalAmount = 0;
 
-            $method->setMethod('teste');
-//            $method->setMethodTitle($this->getConfigData('name'));
-            $method->setMethodTitle('teste');
+        /** @var \Magento\Quote\Api\Data\CartItemInterface $item */
+        foreach ($request->getAllItems() as $item) {
 
-            $method->setPrice(rand(1,20));
-            $method->setCost(rand(1,20));
+            /**
+             * Skip bundle and configurable product types
+             */
+            if ($item->getProductType() != \Magento\Catalog\Model\Product\Type::TYPE_SIMPLE) {
+                continue;
+            }
 
-            $result->append($method);
+            $hasParent = ($item->getParentItemId()) ? true : false;
+
+            $product        = $this->_productRepository->getById($item->getProductId());
+            $parentProduct  = null;
+
+            if ($hasParent) {
+                $parentProduct        = $this->_productRepository->getById($item->getParentItem()->getProductId());
+            }
+
+            $items[] = [
+                'Weight'    => $product->getWeight(),
+                'Length'    => ($hasParent) ? $product->getData('ts_dimensions_length') : $product->getData('ts_dimensions_length'),
+                'Height'    => ($hasParent) ? $product->getData('ts_dimensions_height') : $product->getData('ts_dimensions_height'),
+                'Width'     => ($hasParent) ? $product->getData('ts_dimensions_width') : $product->getData('ts_dimensions_width'),
+                'Quantity'  => ($hasParent) ? $item->getParentItem()->getQty() : $item->getQty(),
+            ];
+
+            $totalAmount += $item->getQty() * $item->getPrice();
         }
+
+        $apiRequest = [
+            'SellerCEP'             => '04601001',
+            'RecipientCEP'          => '95010510',
+            'ShipmentInvoiceValue'  => $totalAmount,
+            'ShippingItemArray'     => $items,
+        ];
+
+        $this->setRequest($request);
+        $this->setApiRequest($apiRequest);
+    }
+
+    /**
+     * ???
+     * @todo
+     *
+     * @return Result
+     * @throws \Zend_Http_Client_Exception
+     */
+    protected function _getQuotes()
+    {
+        try {
+            $apiResults = $this->_getApiResults();
+
+            /** @var \Magento\Shipping\Model\Rate\Result $result */
+            $result = $this->_rateFactory->create();
+
+            foreach ($apiResults as $apiResult) {
+                $method = $this->_rateMethodFactory->create();
+                $method->setCarrier($this->_code);
+                $method->setCarrierTitle('');
+                $method->setMethod($apiResult->Carrier.''.$apiResult->ServiceDescription);
+                $method->setMethodTitle($apiResult->Carrier.' - '.$apiResult->ServiceDescription);
+                $method->setPrice($apiResult->ShippingPrice);
+                $method->setCost($apiResult->ShippingPrice);
+                $result->append($method);
+            }
+
+        } catch (Exception $e) {
+            $a = 1;
+        }
+
+        $this->_result = $result;
 
         return $result;
     }
 
+
     /**
-     * Allows free shipping when all product items have free shipping (promotions etc.)
+     * ?????
+     * @todo
      *
-     * @param \Magento\Quote\Model\Quote\Address\RateRequest $request
-     * @return void
+     * @return object
+     * @throws \Zend_Http_Client_Exception
      */
-    protected function _updateFreeMethodQuote($request)
+    protected function _getApiResults()
     {
-        $freeShipping = false;
-        $items = $request->getAllItems();
-        $c = count($items);
-        for ($i = 0; $i < $c; $i++) {
-            if ($items[$i]->getProduct() instanceof \Magento\Catalog\Model\Product) {
-                if ($items[$i]->getFreeShipping()) {
-                    $freeShipping = true;
-                } else {
-                    return;
-                }
-            }
+        /** @var \Magento\Framework\HTTP\ZendClient $client */
+        $client = $this->_zendClientFactory->create();
+
+        $client->setUri('http://api.frenet.com.br/shipping/quote');
+        $client->setMethod(\Zend_Http_Client::POST);
+        $client->setRawData(json_encode($this->getApiRequest()), 'application/json');
+        $client->setHeaders(
+            [
+                'Content-Type' => 'application/json',
+                'token'        => '405D6786RC542R4AD2RA994R3177D4EFF2BD'
+            ]
+        );
+        $client->setUrlEncodeBody(false);
+
+        $response = $client->request();
+
+        if (!$response->isSuccessful()) {
+            //thow exception
         }
-        if ($freeShipping) {
-            $request->setFreeShipping(true);
-        }
+
+        //@todo log??
+
+        $bodyResponse = json_decode($response->getBody());
+
+        return $bodyResponse->ShippingSevicesArray;
     }
+
+
+    /**
+     * @param \Magento\Framework\DataObject $request
+     *
+     * @return \Magento\Framework\DataObject|null
+     */
+    protected function _doShipmentRequest(\Magento\Framework\DataObject $request)
+    {
+        return null;
+    }
+
 
     /**
      * @return array
      */
     public function getAllowedMethods()
     {
-//        return ['freeshipping' => $this->getConfigData('name')];
-        return ['teste' => 'teste'];
+        return [$this->_code => $this->getConfigData ('title')];
     }
 }
