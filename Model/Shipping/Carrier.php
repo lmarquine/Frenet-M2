@@ -43,6 +43,11 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
     protected $_zendClientFactory;
 
     /**
+     * @var \Magento\Framework\App\Config\ScopeConfigInterface
+     */
+    protected $_scopeConfig;
+
+    /**
      * @var \Magento\Shipping\Model\Rate\ResultFactory
      */
     protected $_rateFactory;
@@ -68,8 +73,6 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
      * @param \Magento\Directory\Model\CurrencyFactory $currencyFactory
      * @param \Magento\Directory\Helper\Data $directoryData
      * @param \Magento\CatalogInventory\Api\StockRegistryInterface $stockRegistry
-     * @param Dir\Reader $configReader
-     * @param \Magento\Catalog\Model\ResourceModel\Product\CollectionFactory $productCollectionFactory
      * @param array $data
      */
     public function __construct(
@@ -90,12 +93,11 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
         \Magento\Directory\Model\CurrencyFactory $currencyFactory,
         \Magento\Directory\Helper\Data $directoryData,
         \Magento\CatalogInventory\Api\StockRegistryInterface $stockRegistry,
-        \Magento\Framework\Module\Dir\Reader $configReader,
-        \Magento\Catalog\Model\ResourceModel\Product\CollectionFactory $productCollectionFactory,
         array $data = []
     ) {
         $this->_productRepository = $productRepository;
         $this->_zendClientFactory = $zendClientFactory;
+        $this->_scopeConfig       = $scopeConfig;
         $this->_rateFactory       = $rateFactory;
 
         parent::__construct(
@@ -120,17 +122,32 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
 
 
     /**
-     * Processing additional validation to check if carrier applicable.
+     * Processing additional validation (quote data) to check if carrier applicable.
      *
      * @param \Magento\Framework\DataObject $request
+     *
      * @return $this|bool|\Magento\Framework\DataObject
      */
     public function proccessAdditionalValidation(\Magento\Framework\DataObject $request)
     {
         /**
-         * @todo logic
-         * verify: quote items, destination postcode, origin postcode, Frenet Token, etc...
+         * validate request items data
          */
+        if (!count($this->getAllItems($request))) {
+            $this->_errors[] = __('There is no items in this order');
+        }
+
+        /**
+         * validate destination postcode
+         */
+        if (!$request->getDestPostcode()) {
+            $this->_errors[] = __('Please inform the destination postcode');
+        }
+
+        if (!empty($this->_errors)) {
+            $this->debugErrors($this->_errors);
+            return false;
+        }
 
         return $this;
     }
@@ -138,8 +155,10 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
 
     /**
      * @param RateRequest $request
+     *
      * @return bool|\Magento\Framework\DataObject|\Magento\Quote\Model\Quote\Address\RateResult\Error|Result|null
      * @throws \Magento\Framework\Exception\NoSuchEntityException
+     * @throws \Zend_Http_Client_Exception
      */
     public function collectRates(RateRequest $request)
     {
@@ -155,7 +174,39 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
 
 
     /**
-     * @todo refactor this method (move to a separated class), get dynamic data and improve logic
+     * Checks if shipping method is correctly configured
+     *
+     * @return bool
+     */
+    public function canCollectRates()
+    {
+        /**
+         * validate carrier active flag
+         */
+        if (!$this->getConfigFlag($this->_activeFlag)) {
+            return false;
+        }
+
+        /**
+         * validate origin postcode
+         */
+        if (!$this->_scopeConfig->getValue('shipping/origin/postcode', \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $this->getStore())) {
+            return false;
+        }
+
+        /**
+         * validate frenet token
+         */
+        if (!$this->getConfigData('token')) {
+            return false;
+        }
+
+        return true;
+    }
+
+
+    /**
+     * @todo refactor this method (move to a separated class), improve logic
      *
      * @param $request
      * @throws \Magento\Framework\Exception\NoSuchEntityException
@@ -195,9 +246,11 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
             $totalAmount += $item->getQty() * $item->getPrice();
         }
 
+        $totalAmount = 100;
+
         $apiRequest = [
-            'SellerCEP'             => '04601001',
-            'RecipientCEP'          => '95010510',
+            'SellerCEP'             => $this->_scopeConfig->getValue('shipping/origin/postcode', \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $this->getStore()),
+            'RecipientCEP'          => ($request->getDestPostcode()) ? $request->getDestPostcode() : '',
             'ShipmentInvoiceValue'  => $totalAmount,
             'ShippingItemArray'     => $items,
         ];
@@ -206,17 +259,21 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
         $this->setApiRequest($apiRequest);
     }
 
+
     /**
-     * ???
-     * @todo
+     * @todo refactor this method
      *
-     * @return Result
+     * @return $this
      * @throws \Zend_Http_Client_Exception
      */
     protected function _getQuotes()
     {
         try {
+
             $apiResults = $this->_getApiResults();
+            if (!$apiResults) {
+                return $this;
+            }
 
             /** @var \Magento\Shipping\Model\Rate\Result $result */
             $result = $this->_rateFactory->create();
@@ -232,13 +289,14 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
                 $result->append($method);
             }
 
-        } catch (Exception $e) {
-            $a = 1;
+        } catch (\Exception $e) {
+//            $this->logMessage("Error making a curl call: ".$ex->getMessage());
+            return $this;
         }
 
         $this->_result = $result;
 
-        return $result;
+        return $this;
     }
 
 
@@ -260,7 +318,7 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
         $client->setHeaders(
             [
                 'Content-Type' => 'application/json',
-                'token'        => '405D6786RC542R4AD2RA994R3177D4EFF2BD'
+                'token'        => $this->getConfigData('token')
             ]
         );
         $client->setUrlEncodeBody(false);
@@ -268,12 +326,20 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
         $response = $client->request();
 
         if (!$response->isSuccessful()) {
-            //thow exception
+            //thow exception?
+            //log?
+            return null;
         }
 
         //@todo log??
 
         $bodyResponse = json_decode($response->getBody());
+
+        if (!isset($bodyResponse->ShippingSevicesArray)) {
+            //thow exception?
+            //log?
+            return null;
+        }
 
         return $bodyResponse->ShippingSevicesArray;
     }

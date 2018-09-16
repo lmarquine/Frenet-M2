@@ -21,7 +21,7 @@
                     <label>Title</label>
                 </field>
                 <field id="token" translate="label" type="text" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
-                    <label>Frenet API Token</label>
+                    <label>API Token</label>
                 </field>
                 <field id="sallowspecific" translate="label" type="select" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Ship to Applicable Countries</label>
