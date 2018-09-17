@@ -40,23 +40,6 @@
                 <field id="specificerrmsg" translate="label" type="textarea" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Displayed Error Message</label>
                 </field>
-
-
-                <!--<field id="default_height" translate="label comment" type="text" sortOrder="11" showInDefault="1" showInWebsite="1" showInStore="0">-->
-                <!--<label>Default Height</label>-->
-                <!--<comment>If not specified will be used 2cm</comment>-->
-                <!--</field>-->
-                <!--<field id="default_width" translate="label comment" type="text" sortOrder="12" showInDefault="1" showInWebsite="1" showInStore="0">-->
-                <!--<label>Default Width</label>-->
-                <!--<comment>If not specified will be used 16cm</comment>-->
-                <!--</field>-->
-                <!--<field id="show_deliverydays" translate="label" type="select" sortOrder="15" showInDefault="1" showInWebsite="1" showInStore="0">-->
-                <!--<label>Show Delivery Days</label>-->
-                <!--<source_model>Magento\Config\Model\Config\Source\Yesno</source_model>-->
-                <!--</field>-->
-                <!--<field id="sort_order" translate="label" type="text" sortOrder="25" showInDefault="1" showInWebsite="1" showInStore="0">-->
-                    <!--<label>Sort Order</label>-->
-                <!--</field>-->
             </group>
         </section>
     </system>

@@ -59,6 +59,7 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
      * @param \Magento\Quote\Model\Quote\Address\RateRequest $rateRequest
      *
      * @return mixed|null
+     * 
      * @throws \Magento\Framework\Exception\NoSuchEntityException
      * @throws \Zend_Http_Client_Exception
      */
@@ -68,10 +69,10 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
             'SellerCEP'             => $this->getConfigData('shipping/origin/postcode'),
             'RecipientCEP'          => $rateRequest->getDestPostcode(),
             'ShipmentInvoiceValue'  => $rateRequest->getPackageValueWithDiscount(),
-            'ShippingItemArray'     => $this->_prepareQuoteItems($rateRequest),
+            'ShippingItemArray'     => $this->prepareQuoteItems($rateRequest),
         ];
 
-        $response = $this->_request(
+        $response = $this->request(
             self::API_SHIPPING_QUOTE_URN,
             $apiBodyRequest
         );
@@ -84,15 +85,14 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
 
         return $response['ShippingSevicesArray'];
     }
-
-
+    
     /**
      * @param \Magento\Quote\Model\Quote\Address\RateRequest $rateRequest
      *
      * @return array
      * @throws \Magento\Framework\Exception\NoSuchEntityException
      */
-    protected function _prepareQuoteItems(\Magento\Quote\Model\Quote\Address\RateRequest $rateRequest)
+    private function prepareQuoteItems(\Magento\Quote\Model\Quote\Address\RateRequest $rateRequest)
     {
         $items = [];
 
@@ -107,13 +107,7 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
             }
 
             $hasParent = ($item->getParentItemId()) ? true : false;
-
-            $product        = $this->_productRepository->getById($item->getProductId());
-            $parentProduct  = null;
-
-            if ($hasParent) {
-                $parentProduct        = $this->_productRepository->getById($item->getParentItem()->getProductId());
-            }
+            $product   = $this->_productRepository->getById($item->getProductId());
 
             $items[] = [
                 'Weight'    => $product->getWeight(),
@@ -126,8 +120,7 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
 
         return $items;
     }
-
-
+    
     /**
      * @param string $endpoint
      * @param array $data
@@ -136,11 +129,7 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
      * @return array
      * @throws \Zend_Http_Client_Exception
      */
-    protected function _request(
-        $endpoint,
-        $data,
-        $method = \Zend_Http_Client::POST
-    )
+    private function request($endpoint, $data, $method = \Zend_Http_Client::POST)
     {
         /** @var \Magento\Framework\HTTP\ZendClient $client */
         $client = $this->_zendClientFactory->create();
@@ -170,8 +159,7 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
 
         return $bodyResponse;
     }
-
-
+    
     /**
      * @param $path
      *
@@ -179,8 +167,6 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
      */
     public function getConfigData($path)
     {
-        return $this->_scopeConfig->getValue(
-            $path,
-            \Magento\Store\Model\ScopeInterface::SCOPE_STORE);
+        return $this->_scopeConfig->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE);
     }
 }
