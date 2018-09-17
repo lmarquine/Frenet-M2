@@ -43,6 +43,11 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
     protected $_zendClientFactory;
 
     /**
+     * @var \MagedIn\Frenet\Api\ServiceRepositoryInterface
+     */
+    protected $_serviceRepository;
+
+    /**
      * @var \Magento\Framework\App\Config\ScopeConfigInterface
      */
     protected $_scopeConfig;
@@ -79,6 +84,7 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
         \Magento\Catalog\Model\ProductRepository $productRepository,
         \Magento\Framework\HTTP\ZendClientFactory $zendClientFactory,
         \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
+        \MagedIn\Frenet\Api\ServiceRepositoryInterface $serviceRepository,
         \Magento\Quote\Model\Quote\Address\RateResult\ErrorFactory $rateErrorFactory,
         \Psr\Log\LoggerInterface $logger,
         Security $xmlSecurity,
@@ -97,6 +103,7 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
     ) {
         $this->_productRepository = $productRepository;
         $this->_zendClientFactory = $zendClientFactory;
+        $this->_serviceRepository = $serviceRepository;
         $this->_scopeConfig       = $scopeConfig;
         $this->_rateFactory       = $rateFactory;
 
@@ -166,8 +173,16 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
             return $this->getErrorMessage();
         }
 
-        $this->_prepareRequest($request);
-        $this->_getQuotes();
+        $responseItems = $this->_serviceRepository->getShippingQuote($request);
+
+        /**
+         * empty or invalid response
+         */
+        if (!$responseItems) {
+            return $this->_result;
+        }
+
+        $this->_setResult($responseItems);
 
         return $this->_result;
     }
@@ -206,142 +221,31 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
 
 
     /**
-     * @todo refactor this method (move to a separated class), improve logic
+     * Set returned options in Magento
      *
-     * @param $request
-     * @throws \Magento\Framework\Exception\NoSuchEntityException
-     */
-    protected function _prepareRequest($request)
-    {
-        $items       = [];
-        $totalAmount = 0;
-
-        /** @var \Magento\Quote\Api\Data\CartItemInterface $item */
-        foreach ($request->getAllItems() as $item) {
-
-            /**
-             * Skip bundle and configurable product types
-             */
-            if ($item->getProductType() != \Magento\Catalog\Model\Product\Type::TYPE_SIMPLE) {
-                continue;
-            }
-
-            $hasParent = ($item->getParentItemId()) ? true : false;
-
-            $product        = $this->_productRepository->getById($item->getProductId());
-            $parentProduct  = null;
-
-            if ($hasParent) {
-                $parentProduct        = $this->_productRepository->getById($item->getParentItem()->getProductId());
-            }
-
-            $items[] = [
-                'Weight'    => $product->getWeight(),
-                'Length'    => ($hasParent) ? $product->getData('ts_dimensions_length') : $product->getData('ts_dimensions_length'),
-                'Height'    => ($hasParent) ? $product->getData('ts_dimensions_height') : $product->getData('ts_dimensions_height'),
-                'Width'     => ($hasParent) ? $product->getData('ts_dimensions_width') : $product->getData('ts_dimensions_width'),
-                'Quantity'  => ($hasParent) ? $item->getParentItem()->getQty() : $item->getQty(),
-            ];
-
-            $totalAmount += $item->getQty() * $item->getPrice();
-        }
-
-        $totalAmount = 100;
-
-        $apiRequest = [
-            'SellerCEP'             => $this->_scopeConfig->getValue('shipping/origin/postcode', \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $this->getStore()),
-            'RecipientCEP'          => ($request->getDestPostcode()) ? $request->getDestPostcode() : '',
-            'ShipmentInvoiceValue'  => $totalAmount,
-            'ShippingItemArray'     => $items,
-        ];
-
-        $this->setRequest($request);
-        $this->setApiRequest($apiRequest);
-    }
-
-
-    /**
-     * @todo refactor this method
+     * @param $responseItems
      *
      * @return $this
-     * @throws \Zend_Http_Client_Exception
      */
-    protected function _getQuotes()
+    protected function _setResult($responseItems)
     {
-        try {
+        /** @var \Magento\Shipping\Model\Rate\Result $result */
+        $result = $this->_rateFactory->create();
 
-            $apiResults = $this->_getApiResults();
-            if (!$apiResults) {
-                return $this;
-            }
-
-            /** @var \Magento\Shipping\Model\Rate\Result $result */
-            $result = $this->_rateFactory->create();
-
-            foreach ($apiResults as $apiResult) {
-                $method = $this->_rateMethodFactory->create();
-                $method->setCarrier($this->_code);
-                $method->setCarrierTitle('');
-                $method->setMethod($apiResult->Carrier.''.$apiResult->ServiceDescription);
-                $method->setMethodTitle($apiResult->Carrier.' - '.$apiResult->ServiceDescription);
-                $method->setPrice($apiResult->ShippingPrice);
-                $method->setCost($apiResult->ShippingPrice);
-                $result->append($method);
-            }
-
-        } catch (\Exception $e) {
-//            $this->logMessage("Error making a curl call: ".$ex->getMessage());
-            return $this;
+        foreach ($responseItems as $item) {
+            $method = $this->_rateMethodFactory->create();
+            $method->setCarrier($this->_code)
+                ->setCarrierTitle($this->getConfigData('title'))
+                ->setMethod($item['Carrier'].$item['ServiceDescription'])
+                ->setMethodTitle($item['Carrier'].' - '.$item['ServiceDescription'])
+                ->setPrice($item['ShippingPrice'])
+                ->setCost($item['ShippingPrice']);
+            $result->append($method);
         }
 
         $this->_result = $result;
 
         return $this;
-    }
-
-
-    /**
-     * ?????
-     * @todo
-     *
-     * @return object
-     * @throws \Zend_Http_Client_Exception
-     */
-    protected function _getApiResults()
-    {
-        /** @var \Magento\Framework\HTTP\ZendClient $client */
-        $client = $this->_zendClientFactory->create();
-
-        $client->setUri('http://api.frenet.com.br/shipping/quote');
-        $client->setMethod(\Zend_Http_Client::POST);
-        $client->setRawData(json_encode($this->getApiRequest()), 'application/json');
-        $client->setHeaders(
-            [
-                'Content-Type' => 'application/json',
-                'token'        => $this->getConfigData('token')
-            ]
-        );
-        $client->setUrlEncodeBody(false);
-
-        $response = $client->request();
-
-        if (!$response->isSuccessful()) {
-            //thow exception?
-            //log?
-            return null;
-        }
-
-        //@todo log??
-
-        $bodyResponse = json_decode($response->getBody());
-
-        if (!isset($bodyResponse->ShippingSevicesArray)) {
-            //thow exception?
-            //log?
-            return null;
-        }
-
-        return $bodyResponse->ShippingSevicesArray;
     }
 
 
