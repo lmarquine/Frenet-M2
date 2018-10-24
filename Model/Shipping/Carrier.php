@@ -168,7 +168,9 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
     public function collectRates(RateRequest $request)
     {
         if (!$this->canCollectRates()) {
-            return $this->getErrorMessage();
+            $errorMessage = $this->getErrorMessage();
+            $this->logger->debug("Frenet canCollectRates: " . $errorMessage );        
+            return $errorMessage;
         }
 
         $responseItems = $this->_serviceRepository->getShippingQuote($request);

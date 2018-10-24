@@ -9,8 +9,15 @@
 
 namespace MagedIn\Frenet\Api;
 
-interface ServiceRepositoryInterface
+interface CategoryRepositoryInterface
 {
 
-    public function getShippingQuote(\Magento\Quote\Model\Quote\Address\RateRequest $rateRequest);
+    /**
+     * @param Magento\Catalog\Model\Product $productObj
+     * 
+     * @return array
+     */
+    public function getCategories($productObj);
+
+    
 }
