@@ -31,7 +31,7 @@ class FrenetApi
      */
     public function __construct( \Psr\Log\LoggerInterface $logger ) {
         $this->logger = $logger;
-        $this->logger->debug("Frenet iniciado");
+        $this->logger->debug("Frenet API iniciado");
     }
 
     /**

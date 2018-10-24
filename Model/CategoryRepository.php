@@ -80,10 +80,14 @@ class CategoryRepository implements \MagedIn\Frenet\Api\CategoryRepositoryInterf
         $categoryIds = $productObj->getCategoryIds();
         $result = '';
 
-        $categories = $this->getCategoryCollection()->addAttributeToFilter('entity_id', $categoryIds);
-        foreach ($categories as $cat) {
-            if(strpos($result, $cat->getName())=== false)
-                $result .= $cat->getName().'|';
+        if (count($categoryIds) > 0) {
+
+            $categories = $this->getCategoryCollection()->addAttributeToFilter('entity_id', $categoryIds);
+            foreach ($categories as $cat) {
+                if(strpos($result, $cat->getName())=== false)
+                    $result .= $cat->getName().'|';
+            }
+    
         }
 
         return $result;

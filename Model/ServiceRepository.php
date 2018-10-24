@@ -74,7 +74,7 @@ class ServiceRepository extends AbstractModel implements \MagedIn\Frenet\Api\Ser
      */
     public function getShippingQuote(\Magento\Quote\Model\Quote\Address\RateRequest $rateRequest)
     {
-
+        $this->logger->debug("getShippingQuote iniciado");        
         try {
 
             $coupon = null;
