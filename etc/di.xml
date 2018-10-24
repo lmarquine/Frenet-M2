@@ -9,9 +9,5 @@
  */
 -->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
-
     <preference for="MagedIn\Frenet\Api\ServiceRepositoryInterface" type="MagedIn\Frenet\Model\ServiceRepository"/>
-    <preference for="MagedIn\Frenet\Api\CategoryRepositoryInterface" type="MagedIn\Frenet\Model\CategoryRepository"/>
-    <preference for="MagedIn\Frenet\Api\ProductRepositoryInterface" type="MagedIn\Frenet\Model\ProductRepository"/>
-
 </config>

@@ -127,7 +127,6 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
         );
     }
 
-
     /**
      * Processing additional validation (quote data) to check if carrier applicable.
      *
@@ -159,7 +158,6 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
         return $this;
     }
 
-
     /**
      * @param RateRequest $request
      *
@@ -184,11 +182,10 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
             return $this->_result;
         }
 
-        $this->_setResult($responseItems);
+        $this->setResult($responseItems);
 
         return $this->_result;
     }
-
 
     /**
      * Checks if shipping method is correctly configured
@@ -220,8 +217,7 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
 
         return true;
     }
-
-
+    
     /**
      * Set returned options in Magento
      *
@@ -229,7 +225,7 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
      *
      * @return $this
      */
-    protected function _setResult($responseItems)
+    private function setResult($responseItems)
     {
         /** @var \Magento\Shipping\Model\Rate\Result $result */
         $result = $this->_rateFactory->create();
@@ -250,7 +246,6 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
         return $this;
     }
 
-
     /**
      * @param \Magento\Framework\DataObject $request
      *
@@ -260,8 +255,7 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
     {
         return null;
     }
-
-
+    
     /**
      * @return array
      */

@@ -13,88 +13,32 @@
         <section id="carriers" translate="label" type="text" sortOrder="100" showInDefault="1" showInWebsite="1" showInStore="1">
             <group id="magedinfrenet" translate="label" type="text" sortOrder="0" showInDefault="1" showInWebsite="1" showInStore="1">
                 <label>Frenet</label>
-                <comment>
-                    <![CDATA[ <div style="background: #FFF; border: 0px solid #0091DB;">
-                    <div style="padding:10px;float: left;text-align: left; vertical-align:bottom;">
-                    <a href="http://www.frenet.com.br" target="_blank">
-                    <img src="https://painel.frenet.com.br/Content/images/Frenet_logo_painel.png" style="float: left;" />
-                    </a>
-                    <b>
-                    Para configurar as transportadoras as quais deseja obter cotações de frete, obter usuário e senha de acesso,
-                    cadastrar regras de frete, acesse o <a href="https://painel.frenet.com.br" target="_blank">painel administrativo Frenet</a>
-                    </div>
-                    </b>
-                    <div class="clear"></div>
-                    </div> ]]>
-                </comment>
                 <field id="active" translate="label" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Enabled</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                 </field>
                 <field id="title" translate="label" type="text" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Title</label>
-                </field>                
+                </field>
                 <field id="token" translate="label" type="text" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>API Token</label>
                 </field>
-                <field id="use_default" translate="label" type="select" sortOrder="40" showInDefault="1" showInWebsite="1" showInStore="1">
-                    <label>Utilizar dimensões padrão</label>
-                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-                    <comment>O frete será calculado com as dimensões padrão preenchidas a seguir</comment>
-                </field>
-                <field id="default_height" translate="label" type="text" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="1">
-                    <label>Altura Padrão (cm)</label>
-                    <comment><![CDATA[Mínimo de 2 cm.]]></comment>
-                </field>
-                <field id="default_length" translate="label" type="text" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1">
-                    <label>Comprimento Padrão (cm)</label>
-                    <comment><![CDATA[Mínimo de 16 cm.]]></comment>
-                </field>
-                <field id="default_width" translate="label" type="text" sortOrder="70" showInDefault="1" showInWebsite="1" showInStore="1">
-                    <label>Largura Padrão (cm)</label>
-                    <comment><![CDATA[Mínimo de 11 cm.]]></comment>
-                </field>
-                <field id="default_weight" translate="label" type="text" sortOrder="80" showInDefault="1" showInWebsite="1" showInStore="1">
-                    <label>Peso Padrão</label>
-                </field>
-                <field id="weight_type" translate="label" type="select" sortOrder="85" showInDefault="1" showInWebsite="1" showInStore="1">
-                    <label>Formato do Peso</label>
-                    <source_model>MagedIn\Frenet\Model\Source\WeightType</source_model>
-                    <comment>Formato do peso dos produtos.</comment>
-                    <tooltip>O formato do peso irá implicar na maneira como o mesmo é cadastrado no produto, por
-                        exemplo, 1 Kg no formato "Kilo" será "1.000", já em "Gramas" será "1000.000".
-                    </tooltip>
-                </field>
-                <field id="show_delivery" translate="label" type="select" sortOrder="90" showInDefault="1" showInWebsite="1" showInStore="1">
-                    <label>Exibir Prazo de Entrega</label>
-                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-                </field>
-                <field id="msgprazo" translate="label" type="text" sortOrder="100" showInDefault="1" showInWebsite="1" showInStore="1">
-                    <label>Mensagem que exibe o prazo de entrega</label>
-                </field>
-                <field id="add_delivery_days" translate="label" type="text" sortOrder="110" showInDefault="1" showInWebsite="1" showInStore="1">
-                    <label>Adicionar ao prazo de entrega (dias)</label>
-                    <comment>Adicionará mais dias aos prazos de entrega fornecidos.</comment>
-                </field>
-                <field id="showmethod" translate="label" type="select" sortOrder="120" showInDefault="1" showInWebsite="1" showInStore="0">
-                    <label>Show Method if Not Applicable</label>
-                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-                </field>
-                <field id="specificerrmsg" translate="label" type="textarea" sortOrder="130" showInDefault="1" showInWebsite="1" showInStore="1">
-                    <label>Displayed Error Message</label>
-                </field>
-                <field id="sallowspecific" translate="label" type="select" sortOrder="140" showInDefault="1" showInWebsite="1" showInStore="0">
+                <field id="sallowspecific" translate="label" type="select" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Ship to Applicable Countries</label>
                     <frontend_class>shipping-applicable-country</frontend_class>
                     <source_model>Magento\Shipping\Model\Config\Source\Allspecificcountries</source_model>
                 </field>
-                <field id="specificcountry" translate="label" type="multiselect" sortOrder="150" showInDefault="1" showInWebsite="1" showInStore="0">
+                <field id="specificcountry" translate="label" type="multiselect" sortOrder="40" showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Ship to Specific Countries</label>
                     <source_model>Magento\Directory\Model\Config\Source\Country</source_model>
                     <can_be_empty>1</can_be_empty>
-                </field>                                        
-                <field id="sort_order" translate="label" type="text" sortOrder="160" showInDefault="1" showInWebsite="1" showInStore="0">
-                    <label>Sort Order</label>
+                </field>
+                <field id="showmethod" translate="label" type="select" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Show Method if Not Applicable</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="specificerrmsg" translate="label" type="textarea" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Displayed Error Message</label>
                 </field>
             </group>
         </section>

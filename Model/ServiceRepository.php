@@ -9,26 +9,22 @@
 
 namespace MagedIn\Frenet\Model;
 
-use Magento\Framework\Model\AbstractModel;
-use MagedIn\Frenet\Model\Shipping\FrenetApi as FrenetApi;
-
-class ServiceRepository extends AbstractModel implements \MagedIn\Frenet\Api\ServiceRepositoryInterface
+class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterface
 {
-
     /**
-     * @var \MagedIn\Frenet\Model\Shipping\FrenetApi
+     * @var string
      */
-    protected $frenetApi;
+    const API_BASE_URI = 'http://api.frenet.com.br/';
 
     /**
-     * @var \Psr\Log\LoggerInterface
+     * @var string
      */
-    protected $logger;
+    const API_SHIPPING_QUOTE_URN = 'shipping/quote';
 
     /**
-     * @var \MagedIn\Frenet\Model\ProductRepository 
-     * /
-    protected $_productShipping;
+     * @var \Magento\Catalog\Model\ProductRepository
+     */
+    protected $_productRepository;
 
     /**
      * @var \Magento\Framework\HTTP\ZendClientFactory
@@ -38,7 +34,8 @@ class ServiceRepository extends AbstractModel implements \MagedIn\Frenet\Api\Ser
     /**
      * @var \Magento\Framework\App\Config\ScopeConfigInterface
      */
-    protected $_scopeConfig;    
+    protected $_scopeConfig;
+
 
     /**
      * ServiceRepository constructor.
@@ -48,19 +45,12 @@ class ServiceRepository extends AbstractModel implements \MagedIn\Frenet\Api\Ser
     public function __construct(
         \Magento\Catalog\Model\ProductRepository $productRepository,
         \Magento\Framework\HTTP\ZendClientFactory $zendClientFactory,
-        \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
-        \MagedIn\Frenet\Model\ProductRepository $productShipping,
-        \Psr\Log\LoggerInterface $logger, 
-        array $data = []
+        \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
     )
     {
         $this->_productRepository = $productRepository;
         $this->_zendClientFactory = $zendClientFactory;
         $this->_scopeConfig       = $scopeConfig;
-        $this->logger = $logger;
-        $this->_productShipping = $productShipping;
-
-        $this->logger->debug("Frenet iniciado");        
     }
 
     /**
@@ -69,76 +59,107 @@ class ServiceRepository extends AbstractModel implements \MagedIn\Frenet\Api\Ser
      * @param \Magento\Quote\Model\Quote\Address\RateRequest $rateRequest
      *
      * @return mixed|null
+     * 
      * @throws \Magento\Framework\Exception\NoSuchEntityException
      * @throws \Zend_Http_Client_Exception
      */
     public function getShippingQuote(\Magento\Quote\Model\Quote\Address\RateRequest $rateRequest)
     {
-        $this->logger->debug("getShippingQuote iniciado");        
-        try {
+        $apiBodyRequest = [
+            'SellerCEP'             => $this->getConfigData('shipping/origin/postcode'),
+            'RecipientCEP'          => $rateRequest->getDestPostcode(),
+            'ShipmentInvoiceValue'  => $rateRequest->getPackageValueWithDiscount(),
+            'ShippingItemArray'     => $this->prepareQuoteItems($rateRequest),
+        ];
 
-            $coupon = null;
-            $recipientDocument = null;
-            $add_delivery_days = $this->getConfigData('carriers/magedinfrenet/add_delivery_days');
-            $msgprazo = $this->getConfigData('carriers/magedinfrenet/msgprazo');
-    
-            $apiBodyRequest = [
-                'Coupom' => $coupon,                    
-                'SellerCEP'             => $this->getConfigData('shipping/origin/postcode'),
-                'RecipientCEP'          => $rateRequest->getDestPostcode(),
-                'RecipientCountry'      => $rateRequest->getDestCountryId(),
-                'RecipientDocument'     => $recipientDocument,
-                'ShipmentInvoiceValue'  => $rateRequest->getPackageValueWithDiscount(),
-                'ShippingItemArray'     => $this->_prepareQuoteItems($rateRequest)
-            ];
+        $response = $this->request(
+            self::API_SHIPPING_QUOTE_URN,
+            $apiBodyRequest
+        );
 
-            $token = $this->getConfigData('carriers/magedinfrenet/token');            
-            
-            $frenetApi = new FrenetApi($this->logger);
-            $response = $frenetApi->call( $token, $apiBodyRequest, $this->_zendClientFactory );
-
-            return $response;
-            
-        }
-        catch(\Exception $exc) {
-            $this->logger->critical("Frenet-getShippingQuote-Error: ". $exc->getMessage());
+        if (!isset($response['ShippingSevicesArray'])) {
+            //throw exception?
+            //log?
+            return null;
         }
 
-        return null;
+        return $response['ShippingSevicesArray'];
     }
-
+    
     /**
      * @param \Magento\Quote\Model\Quote\Address\RateRequest $rateRequest
      *
      * @return array
      * @throws \Magento\Framework\Exception\NoSuchEntityException
      */
-    protected function _prepareQuoteItems(\Magento\Quote\Model\Quote\Address\RateRequest $rateRequest)
+    private function prepareQuoteItems(\Magento\Quote\Model\Quote\Address\RateRequest $rateRequest)
     {
         $items = [];
-
-        $use_default = $this->getConfigData('carriers/magedinfrenet/use_default');
-        $default_length = $this->getConfigData('carriers/magedinfrenet/default_length');
-        $default_width = $this->getConfigData('carriers/magedinfrenet/default_width');
-        $default_height = $this->getConfigData('carriers/magedinfrenet/default_height');        
-        $default_weight = $this->getConfigData('carriers/magedinfrenet/default_weight');        
-        $weight_type = $this->getConfigData('carriers/magedinfrenet/weight_type');        
-
-        $this->logger->debug("use_default: " . $use_default . ";length: " . $default_length . ";width: " . $default_width . ";height: " . $default_height . ";default_weight: " . $default_weight . ";weight_type: " . $weight_type);
-
-        $this->_productShipping->setDefault($use_default, $default_length, $default_width, $default_height, $default_weight, $weight_type);
 
         /** @var \Magento\Quote\Api\Data\CartItemInterface $item */
         foreach ($rateRequest->getAllItems() as $item) {
 
-            $shippingItem = $this->_productShipping->getShippingItem($item);
-            if (!$shippingItem) continue;
-            $items[] = $shippingItem;
+            /**
+             * Skip bundle and configurable product types
+             */
+            if ($item->getProductType() != \Magento\Catalog\Model\Product\Type::TYPE_SIMPLE) {
+                continue;
+            }
+
+            $hasParent = ($item->getParentItemId()) ? true : false;
+            $product   = $this->_productRepository->getById($item->getProductId());
+
+            $items[] = [
+                'Weight'    => $product->getWeight(),
+                'Length'    => $product->getData('ts_dimensions_length'),
+                'Height'    => $product->getData('ts_dimensions_height'),
+                'Width'     => $product->getData('ts_dimensions_width'),
+                'Quantity'  => ($hasParent) ? $item->getParentItem()->getQty() : $item->getQty(),
+            ];
         }
 
         return $items;
     }
+    
+    /**
+     * @param string $endpoint
+     * @param array $data
+     * @param string|null $method
+     *
+     * @return array
+     * @throws \Zend_Http_Client_Exception
+     */
+    private function request($endpoint, $data, $method = \Zend_Http_Client::POST)
+    {
+        /** @var \Magento\Framework\HTTP\ZendClient $client */
+        $client = $this->_zendClientFactory->create();
 
+        $client->setUri(self::API_BASE_URI.$endpoint);
+        $client->setMethod($method);
+        $client->setRawData(json_encode($data), 'application/json');
+        $client->setHeaders(
+            [
+                'Content-Type' => 'application/json',
+                'token'        => $this->getConfigData('carriers/magedinfrenet/token')
+            ]
+        );
+        $client->setUrlEncodeBody(false);
+
+        $response = $client->request();
+
+        if (!$response->isSuccessful()) {
+            //throw exception?
+            //log?
+            return null;
+        }
+
+        //@todo log??
+
+        $bodyResponse = json_decode($response->getBody(), true);
+
+        return $bodyResponse;
+    }
+    
     /**
      * @param $path
      *
@@ -146,8 +167,6 @@ class ServiceRepository extends AbstractModel implements \MagedIn\Frenet\Api\Ser
      */
     public function getConfigData($path)
     {
-        return $this->_scopeConfig->getValue(
-            $path,
-            \Magento\Store\Model\ScopeInterface::SCOPE_STORE);
+        return $this->_scopeConfig->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE);
     }
 }
