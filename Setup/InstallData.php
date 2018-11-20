@@ -1,6 +1,5 @@
 <?php
 
-
 namespace MagedIn\Frenet\Setup;
 
 use Magento\Eav\Setup\EavSetup;
@@ -12,18 +11,22 @@ use Magento\Eav\Setup\EavSetupFactory;
 class InstallData implements InstallDataInterface
 {
 
-    protected $logger;
+    /** @var \Psr\Log\LoggerInterface */
+    private $logger;
 
+    /** @var EavSetupFactory */
     private $eavSetupFactory;
 
     /**
      * Constructor
      *
      * @param \Magento\Eav\Setup\EavSetupFactory $eavSetupFactory
-     * @param \Psr\Log\LoggerInterface $logger  
+     * @param \Psr\Log\LoggerInterface           $logger
      */
-    public function __construct(EavSetupFactory $eavSetupFactory, \Psr\Log\LoggerInterface $logger  )
-    {
+    public function __construct(
+        EavSetupFactory $eavSetupFactory,
+        \Psr\Log\LoggerInterface $logger
+    ) {
         $this->eavSetupFactory = $eavSetupFactory;
         $this->logger = $logger;
     }
@@ -31,13 +34,8 @@ class InstallData implements InstallDataInterface
     /**
      * {@inheritdoc}
      */
-    public function install(
-        ModuleDataSetupInterface $setup,
-        ModuleContextInterface $context
-    ) {
-
-        $this->logger->info("Frenet InstallData iniciado");
-
+    public function install(ModuleDataSetupInterface $setup, ModuleContextInterface $context)
+    {
         $setup->startSetup();
 
         try {
@@ -45,22 +43,19 @@ class InstallData implements InstallDataInterface
             $eavSetup = $this->eavSetupFactory->create(['setup' => $setup]);
 
             // new instalation
-            if(!$context->getVersion() || version_compare($context->getVersion(), '1.0.0') == 0) {
-                $this->configureNewInstalation($eavSetup);
+            if (!$context->getVersion() || version_compare($context->getVersion(), '1.0.0') == 0) {
+                $this->configureNewInstallation($eavSetup);
             }
-     
+
             //code to upgrade new version
             if (version_compare($context->getVersion(), '1.0.1') == 0) {
-                
             }
-     
+
             if (version_compare($context->getVersion(), '1.0.2') == 0) {
                 //code to upgrade to 1.0.1
             }
-
-        }
-        catch (\Exception $ex) {
-            $this->logger->critical("Frenet-InstallData-Error: ". $ex->getMessage() );
+        } catch (\Exception $ex) {
+            $this->logger->critical("Frenet-InstallData-Error: " . $ex->getMessage());
         }
 
         $setup->endSetup();
@@ -69,38 +64,54 @@ class InstallData implements InstallDataInterface
     }
 
     /**
-     * Criar os novos atributos durante a primeira instalação
+     * Creates the new attributes during the module installation.
+     *
+     * @param EavSetup $eavSetup
      */
-    protected function configureNewInstalation($eavSetup) {
+    protected function configureNewInstallation(EavSetup $eavSetup)
+    {
         //code to upgrade to 1.0.0
-        $codigo = 'volume_comprimento';
-        $config = $this->prepareConfiguration('Comprimento (cm)', 16, 'Comprimento da embalagem do produto (Para cálculo de frete, mínimo de 16cm)');
-        $this->configureProductAttribute($eavSetup, $codigo, $config);
+        $code = 'volume_comprimento';
+        $description = 'Comprimento da embalagem do produto (Para cálculo de frete, mínimo de 16cm)';
+        $config = $this->prepareConfiguration('Comprimento (cm)', 16, $description);
 
-        $codigo = 'volume_altura';
-        $config = $this->prepareConfiguration('Altura (cm)', 2, 'Altura da embalagem do produto (Para cálculo de frete, mínimo de 2cm)');                
-        $this->configureProductAttribute($eavSetup, $codigo, $config);
-        
-        $codigo = 'volume_largura';
-        $config = $this->prepareConfiguration('Largura (cm)', 11, 'Largura da embalagem do produto (Para cálculo de frete, mínimo de 11cm)');
-        $this->configureProductAttribute($eavSetup, $codigo, $config);
+        $this->configureProductAttribute($eavSetup, $code, $config);
+
+        $code = 'volume_altura';
+        $description = 'Altura da embalagem do produto (Para cálculo de frete, mínimo de 2cm)';
+        $config = $this->prepareConfiguration('Altura (cm)', 2, $description);
+        $this->configureProductAttribute($eavSetup, $code, $config);
+
+        $code = 'volume_largura';
+        $description = 'Largura da embalagem do produto (Para cálculo de frete, mínimo de 11cm)';
+        $config = $this->prepareConfiguration('Largura (cm)', 11, $description);
+        $this->configureProductAttribute($eavSetup, $code, $config);
 
         // Add leadtime to product attribute set
-        $codigo = 'leadtime';
-        $config = $this->prepareConfiguration('Lead time (dias)', 0, 'Tempo de fabricação do produto (Para cálculo de frete)');
-        $this->configureProductAttribute($eavSetup, $codigo, $config);
+        $code = 'leadtime';
+        $description = 'Tempo de fabricação do produto (Para cálculo de frete)';
+        $config = $this->prepareConfiguration('Lead time (dias)', 0, $description);
+        $this->configureProductAttribute($eavSetup, $code, $config);
 
         // Add fragile to product attribute set
-        $codigo = 'fragile';
-        $config = $this->prepareConfiguration('Produto frágil?', 0, 'Produto contém vidro ou outros materiais frágeis? (Para cálculo de frete)', 'boolean');
-        $this->configureProductAttribute($eavSetup, $codigo, $config);
+        $code = 'fragile';
+        $description = 'Produto contém vidro ou outros materiais frágeis? (Para cálculo de frete)';
+        $config = $this->prepareConfiguration('Produto frágil?', 0, $description, 'boolean');
+        $this->configureProductAttribute($eavSetup, $code, $config);
     }
 
     /**
-     * Montar o array de configuração com os dados padrão 
+     * Creates the config array with default data.
+     *
+     * @param string $label
+     * @param mixed  $defaultValue
+     * @param string $description
+     * @param string $input
+     *
+     * @return array
      */
-    protected function prepareConfiguration($label, $valueDefault, $description, $input = 'text') {
-
+    protected function prepareConfiguration($label, $defaultValue, $description, $input = 'text')
+    {
         if (!isset($input)) {
             $input = 'text';
         }
@@ -111,46 +122,50 @@ class InstallData implements InstallDataInterface
             \Magento\Downloadable\Model\Product\Type::TYPE_DOWNLOADABLE,
             \Magento\Catalog\Model\Product\Type::TYPE_BUNDLE,
         ];
+
         $productTypes = join(',', $productTypes);
 
-        $config = [                        
-            'label'    => $label,
-            'default'  => $valueDefault,
-            'note'     => $description,
-            'input'    => $input,
-            'apply_to' => $productTypes,
-            
-            'type'     => 'int',
-            'group' => 'Cotação de frete',
-            'backend' => \Magento\Catalog\Model\Product\Attribute\Backend\Price::class,
-            'frontend' => '',            
-            'global' => \Magento\Eav\Model\Entity\Attribute\ScopedAttributeInterface::SCOPE_GLOBAL,
-            'visible' => true,
-            'required' => false,
-            'user_defined' => false,
-            'input_renderer' => \Magento\Msrp\Block\Adminhtml\Product\Helper\Form\Type::class,
+        $config = [
+            'label'                   => $label,
+            'default'                 => $defaultValue,
+            'note'                    => $description,
+            'input'                   => $input,
+            'apply_to'                => $productTypes,
+            'type'                    => 'int',
+            'group'                   => 'Cotação de Frete',
+            'backend'                 => \Magento\Catalog\Model\Product\Attribute\Backend\Price::class,
+            'frontend'                => '',
+            'global'                  => \Magento\Eav\Model\Entity\Attribute\ScopedAttributeInterface::SCOPE_GLOBAL,
+            'visible'                 => true,
+            'required'                => false,
+            'user_defined'            => false,
+            'input_renderer'          => \Magento\Msrp\Block\Adminhtml\Product\Helper\Form\Type::class,
             'frontend_input_renderer' => \Magento\Msrp\Block\Adminhtml\Product\Helper\Form\Type::class,
-            'visible_on_front' => true,
+            'visible_on_front'        => true,
             'used_in_product_listing' => true,
-            'is_used_in_grid' => true,
-            'is_visible_in_grid' => false,
-            'is_filterable_in_grid' => true
+            'is_used_in_grid'         => true,
+            'is_visible_in_grid'      => false,
+            'is_filterable_in_grid'   => true
         ];
 
         return $config;
     }
 
     /**
-     * Configurar o novo attribute
+     * Configures the new attribute.
+     *
+     * @param EavSetup $eavSetup
+     * @param string   $code
+     * @param array    $config
      */
-    protected function configureProductAttribute($eavSetup, $codigo, $config) {
+    protected function configureProductAttribute(EavSetup $eavSetup, $code, array $config)
+    {
         try {
-            $this->logger->debug('Frenet-configureProductAttribute: ' . $codigo);
-            $eavSetup->addAttribute(\Magento\Catalog\Model\Product::ENTITY, $codigo, $config);
-        }
-        catch (\Exception $ex) {
-            $this->logger->critical("Frenet-configureProductAttribute-Error: attr: ". $codigo . "; error:" . $ex->getMessage() );
+            $this->logger->debug('Frenet-configureProductAttribute: ' . $code);
+            $eavSetup->addAttribute(\Magento\Catalog\Model\Product::ENTITY, $code, $config);
+        } catch (\Exception $ex) {
+            $this->logger
+                ->critical("Frenet-configureProductAttribute-Error: attr: " . $code . "; error:" . $ex->getMessage());
         }
     }
-
 }
