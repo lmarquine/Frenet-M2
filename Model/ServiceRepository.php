@@ -23,13 +23,13 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
     const CONFIG_TOKEN_XPATH = 'carriers/magedinfrenet/token';
 
     /** @var \Magento\Catalog\Model\ProductRepository */
-    protected $productRepository;
+    private $productRepository;
 
     /** @var \Magento\Framework\HTTP\ZendClientFactory */
-    protected $zendClientFactory;
+    private $zendClientFactory;
 
     /** @var \Magento\Framework\App\Config\ScopeConfigInterface */
-    protected $scopeConfig;
+    private $scopeConfig;
 
     /**
      * ServiceRepository constructor.

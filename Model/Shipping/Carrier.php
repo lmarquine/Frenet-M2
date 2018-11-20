@@ -9,80 +9,64 @@
 
 namespace MagedIn\Frenet\Model\Shipping;
 
-use Magento\Framework\Module\Dir;
 use Magento\Framework\Xml\Security;
 use Magento\Quote\Model\Quote\Address\RateRequest;
-use Magento\Setup\Exception;
 use Magento\Shipping\Model\Rate\Result;
+use Magento\Shipping\Model\Carrier\AbstractCarrierOnline;
+use Magento\Shipping\Model\Carrier\CarrierInterface;
+use Magento\Store\Model\ScopeInterface;
 
-class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
-    implements \Magento\Shipping\Model\Carrier\CarrierInterface
+class Carrier extends AbstractCarrierOnline implements CarrierInterface
 {
     /**
-     * Code of the carrier
+     * Code of the carrier.
+     * As it seems, this code cannot be separated by underscore (_).
      *
      * @var string
      */
     protected $_code = 'magedinfrenet';
+
+    /** @var \Magento\Framework\App\Config\ScopeConfigInterface */
+    protected $_scopeConfig;
+
+    /** @var \Magento\Shipping\Model\Rate\ResultFactory */
+    protected $_rateFactory;
 
     /**
      * Rate result data
      *
      * @var Result|null
      */
-    protected $_result = null;
+    private $result = null;
 
-    /**
-     * @var \Magento\Catalog\Model\ProductRepository
-     */
-    protected $_productRepository;
+    /** @var \array */
+    private $errors = [];
 
-    /**
-     * @var \Magento\Framework\HTTP\ZendClientFactory
-     */
-    protected $_zendClientFactory;
-
-    /**
-     * @var \MagedIn\Frenet\Api\ServiceRepositoryInterface
-     */
-    protected $_serviceRepository;
-
-    /**
-     * @var \Magento\Framework\App\Config\ScopeConfigInterface
-     */
-    protected $_scopeConfig;
-
-    /**
-     * @var \Magento\Shipping\Model\Rate\ResultFactory
-     */
-    protected $_rateFactory;
-
+    /** @var \MagedIn\Frenet\Api\ServiceRepositoryInterface */
+    private $serviceRepository;
 
     /**
      * Carrier constructor.
      *
-     * @param \Magento\Catalog\Model\ProductRepository $productRepository
-     * @param \Magento\Framework\HTTP\ZendClientFactory $zendClientFactory
-     * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
-     * @param \Magento\Quote\Model\Quote\Address\RateResult\ErrorFactory $rateErrorFactory
-     * @param \Psr\Log\LoggerInterface $logger
-     * @param Security $xmlSecurity
-     * @param \Magento\Shipping\Model\Simplexml\ElementFactory $xmlElFactory
-     * @param \Magento\Shipping\Model\Rate\ResultFactory $rateFactory
+     * @param \Magento\Framework\App\Config\ScopeConfigInterface          $scopeConfig
+     * @param \MagedIn\Frenet\Api\ServiceRepositoryInterface              $serviceRepository
+     * @param \Magento\Quote\Model\Quote\Address\RateResult\ErrorFactory  $rateErrorFactory
+     * @param \Psr\Log\LoggerInterface                                    $logger
+     * @param Security                                                    $xmlSecurity
+     * @param \Magento\Shipping\Model\Simplexml\ElementFactory            $xmlElFactory
+     * @param \Magento\Shipping\Model\Rate\ResultFactory                  $rateFactory
      * @param \Magento\Quote\Model\Quote\Address\RateResult\MethodFactory $rateMethodFactory
-     * @param \Magento\Shipping\Model\Tracking\ResultFactory $trackFactory
-     * @param \Magento\Shipping\Model\Tracking\Result\ErrorFactory $trackErrorFactory
-     * @param \Magento\Shipping\Model\Tracking\Result\StatusFactory $trackStatusFactory
-     * @param \Magento\Directory\Model\RegionFactory $regionFactory
-     * @param \Magento\Directory\Model\CountryFactory $countryFactory
-     * @param \Magento\Directory\Model\CurrencyFactory $currencyFactory
-     * @param \Magento\Directory\Helper\Data $directoryData
-     * @param \Magento\CatalogInventory\Api\StockRegistryInterface $stockRegistry
-     * @param array $data
+     * @param \Magento\Shipping\Model\Tracking\ResultFactory              $trackFactory
+     * @param \Magento\Shipping\Model\Tracking\Result\ErrorFactory        $trackErrorFactory
+     * @param \Magento\Shipping\Model\Tracking\Result\StatusFactory       $trackStatusFactory
+     * @param \Magento\Directory\Model\RegionFactory                      $regionFactory
+     * @param \Magento\Directory\Model\CountryFactory                     $countryFactory
+     * @param \Magento\Directory\Model\CurrencyFactory                    $currencyFactory
+     * @param \Magento\Directory\Helper\Data                              $directoryData
+     * @param \Magento\CatalogInventory\Api\StockRegistryInterface        $stockRegistry
+     * @param array                                                       $data
      */
     public function __construct(
-        \Magento\Catalog\Model\ProductRepository $productRepository,
-        \Magento\Framework\HTTP\ZendClientFactory $zendClientFactory,
         \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
         \MagedIn\Frenet\Api\ServiceRepositoryInterface $serviceRepository,
         \Magento\Quote\Model\Quote\Address\RateResult\ErrorFactory $rateErrorFactory,
@@ -101,9 +85,7 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
         \Magento\CatalogInventory\Api\StockRegistryInterface $stockRegistry,
         array $data = []
     ) {
-        $this->_productRepository = $productRepository;
-        $this->_zendClientFactory = $zendClientFactory;
-        $this->_serviceRepository = $serviceRepository;
+        $this->serviceRepository = $serviceRepository;
         $this->_scopeConfig       = $scopeConfig;
         $this->_rateFactory       = $rateFactory;
 
@@ -128,7 +110,7 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
     }
 
     /**
-     * Processing additional validation (quote data) to check if carrier applicable.
+     * Make this module compatible with older versions of Magento 2.
      *
      * @param \Magento\Framework\DataObject $request
      *
@@ -136,23 +118,42 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
      */
     public function proccessAdditionalValidation(\Magento\Framework\DataObject $request)
     {
+        return $this->processAdditionalValidation($request);
+    }
+
+    /**
+     * Processing additional validation (quote data) to check if carrier applicable.
+     *
+     * @param \Magento\Framework\DataObject $request
+     *
+     * @return $this|bool|\Magento\Framework\DataObject
+     */
+    public function processAdditionalValidation(\Magento\Framework\DataObject $request)
+    {
         /**
          * validate request items data
          */
         if (!count($this->getAllItems($request))) {
-            $this->_errors[] = __('There is no items in this order');
+            $this->errors[] = __('There is no items in this order');
         }
 
         /**
          * validate destination postcode
          */
         if (!$request->getDestPostcode()) {
-            $this->_errors[] = __('Please inform the destination postcode');
+            $this->errors[] = __('Please inform the destination postcode');
         }
 
-        if (!empty($this->_errors)) {
-            $this->debugErrors($this->_errors);
-            return false;
+        if (!empty($this->errors)) {
+            /** @var \Magento\Quote\Model\Quote\Address\RateResult\Error $error */
+            $error = $this->_rateErrorFactory->create();
+            $error->setCarrier($this->_code);
+            $error->setCarrierTitle($this->getConfigData('title'));
+            $error->setErrorMessage(implode(', ', $this->errors));
+
+            $this->debugErrors($error);
+
+            return $error;
         }
 
         return $this;
@@ -162,29 +163,28 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
      * @param RateRequest $request
      *
      * @return bool|\Magento\Framework\DataObject|\Magento\Quote\Model\Quote\Address\RateResult\Error|Result|null
-     * @throws \Magento\Framework\Exception\NoSuchEntityException
-     * @throws \Zend_Http_Client_Exception
      */
     public function collectRates(RateRequest $request)
     {
         if (!$this->canCollectRates()) {
             $errorMessage = $this->getErrorMessage();
-            $this->logger->debug("Frenet canCollectRates: " . $errorMessage );        
+            $this->_logger->debug("Frenet canCollectRates: " . $errorMessage);
+
             return $errorMessage;
         }
 
-        $responseItems = $this->_serviceRepository->getShippingQuote($request);
+        $responseItems = $this->serviceRepository->getShippingQuote($request);
 
         /**
          * empty or invalid response
          */
         if (!$responseItems) {
-            return $this->_result;
+            return $this->result;
         }
 
         $this->setResult($responseItems);
 
-        return $this->_result;
+        return $this->result;
     }
 
     /**
@@ -201,10 +201,13 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
             return false;
         }
 
+        /** @var int $store */
+        $store = $this->getStore();
+
         /**
          * validate origin postcode
          */
-        if (!$this->_scopeConfig->getValue('shipping/origin/postcode', \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $this->getStore())) {
+        if (!$this->_scopeConfig->getValue('shipping/origin/postcode', ScopeInterface::SCOPE_STORE, $store)) {
             return false;
         }
 
@@ -238,10 +241,11 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
                 ->setMethodTitle($item['Carrier'].' - '.$item['ServiceDescription'])
                 ->setPrice($item['ShippingPrice'])
                 ->setCost($item['ShippingPrice']);
+
             $result->append($method);
         }
 
-        $this->_result = $result;
+        $this->result = $result;
 
         return $this;
     }
@@ -261,6 +265,8 @@ class Carrier extends \Magento\Shipping\Model\Carrier\AbstractCarrierOnline
      */
     public function getAllowedMethods()
     {
-        return [$this->_code => $this->getConfigData ('title')];
+        return [
+            $this->_code => $this->getConfigData ('title')
+        ];
     }
 }
