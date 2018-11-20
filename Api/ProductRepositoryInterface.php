@@ -12,12 +12,22 @@ namespace MagedIn\Frenet\Api;
 interface ProductRepositoryInterface
 {
 
-/**
+    /**
      * @param \Magento\Quote\Api\Data\CartItemInterface $item
-     * 
+     *
      * @return array
      */
     public function getShippingItem($item);
 
-    public function setDefault($use_default, $default_length, $default_width, $default_height, $default_weight, $weight_type);
+    /**
+     * @param $useDefault
+     * @param $length
+     * @param $width
+     * @param $height
+     * @param $weight
+     * @param $weightType
+     *
+     * @return mixed
+     */
+    public function setDefault($useDefault, $length, $width, $height, $weight, $weightType);
 }

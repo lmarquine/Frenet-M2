@@ -14,76 +14,78 @@ use MagedIn\Frenet\Model\Source\WeightType as WeightType;
 class ProductRepository implements \MagedIn\Frenet\Api\ProductRepositoryInterface
 {
 
-    protected $logger;
+    /** @var \Psr\Log\LoggerInterface */
+    private $logger;
 
-    
+    /** @var \Magento\Catalog\Model\ProductRepository */
+    private $_productRepository;
+
+    /** @var boolean */
+    private $useDefault;
+
+    /** @var mixed */
+    private $defaultLength;
+
+    /** @var mixed */
+    private $defaultWidth;
+
+    /** @var mixed */
+    private $defaultHeight;
+
+    /** @var mixed */
+    private $defaultWeight;
+
+    /** @var mixed */
+    private $weightType;
+
+    /** @var \MagedIn\Frenet\Model\CategoryRepository */
+    private $categoryRepository;
+
     /**
-     * @var \Magento\Catalog\Model\ProductRepository
-     */
-    protected $_productRepository;
-
-    /**
-     * @var \MagedIn\Frenet\Model\CategoryRepository 
-     * /
-    protected $_category;
-
-    protected $_use_default;
-    protected $_default_length;
-    protected $_default_width;
-    protected $_default_height; 
-    protected $_weight_type;
-
-    /**
-     * ServiceRepository constructor.
+     * ProductRepository constructor.
      *
-     * @param Context $context
+     * @param CategoryRepository                       $categoryRepository
+     * @param \Psr\Log\LoggerInterface                 $logger
+     * @param \Magento\Catalog\Model\ProductRepository $productRepository
      */
     public function __construct(
-        \Magento\Catalog\Model\ProductRepository $productRepository,
-        \MagedIn\Frenet\Model\CategoryRepository $category,
-        \Psr\Log\LoggerInterface $logger        
-    )
-    {
+        CategoryRepository $categoryRepository,
+        \Psr\Log\LoggerInterface $logger,
+        \Magento\Catalog\Model\ProductRepository $productRepository
+    ) {
         $this->_productRepository = $productRepository;
-        $this->logger = $logger;
-        $this->_category = $category;
-        
-        $this->logger->debug("Frenet produto iniciado");        
+        $this->logger             = $logger;
+        $this->categoryRepository = $categoryRepository;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function setDefault($useDefault, $length, $width, $height, $weight, $weightType)
+    {
+        $this->useDefault = $useDefault;
+        $this->defaultLength = $length;
+        $this->defaultWidth = $width;
+        $this->defaultHeight = $height;
+        $this->defaultWeight = $weight;
+        $this->weightType = $weightType;
+
+        return $this;
     }
 
     /**
      * @param \Magento\Quote\Api\Data\CartItemInterface $item
-     * 
+     *
      * @return array
      */
-    public function setDefault($use_default, 
-        $default_length, 
-        $default_width, 
-        $default_height, 
-        $default_weight,
-        $weight_type) {      
-
-        $this->_use_default = $use_default;
-        $this->_default_length = $default_length;
-        $this->_default_width = $default_width;
-        $this->_default_height = $default_height; 
-        $this->_default_weight = $default_weight;
-        $this->_weight_type = $weight_type;
-    }
-
-    /**
-     * @param \Magento\Quote\Api\Data\CartItemInterface $item
-     * 
-     * @return array
-     */
-    public function getShippingItem($item) {        
-
+    public function getShippingItem($item)
+    {
         // Product informations
         $diameter = 0;
-        $isFragile = false;        
+        $isFragile = false;
         $categories = null;
         $sku = null;
-        
+
         /**
          * Skip bundle and configurable product types
          */
@@ -91,46 +93,49 @@ class ProductRepository implements \MagedIn\Frenet\Api\ProductRepositoryInterfac
             return null;
         }
 
-        $hasParent = ($item->getParentItemId()) ? true : false;
-        $product   = $this->_productRepository->getById($item->getProductId());
-        $parentProduct  = null;
-
-        if ($hasParent) {
-            $parentProduct = $this->_productRepository->getById($item->getParentItem()->getProductId());
+        if ($item->getParentItemId()) {
             $qty = $item->getParentItem()->getQty();
-        }
-        else {
+        } else {
             $qty = $item->getQty();
         }
 
+        /** @var \Magento\Catalog\Api\Data\ProductInterface $product */
+        $product = $this->_productRepository->getById($item->getProductId());
+
         // Fragile
-        $isFragile = $product->getFragile();        
-        
+        $isFragile = $product->getFragile();
+
         // SKU
         $sku = $product->getSku();
         // Diameter
         $diameter = 0;
-        
-        if (0 == $this->_use_default) { 
 
-            $length = ($product->getVolume_comprimento() > 0 ? $product->getVolume_comprimento()    : $this->_default_length );
-            $height = ($product->getVolume_altura()      > 0 ? $product->getVolume_altura()         : $this->_default_height );
-            $width = ($product->getVolume_largura()      > 0 ? $product->getVolume_largura()        : $this->_default_width );
-            $weight = ($product->getWeight()             > 0 ? $product->getWeight()                : $this->_default_weight);
-        }
-        else {
-            $length = $this->_default_length;
-            $height = $this->_default_height;
-            $width = $this->_default_width;
-            $weight = $this->_default_weight;
+        /**
+         * Using default values.
+         */
+        $length = $this->defaultLength;
+        $height = $this->defaultHeight;
+        $width  = $this->defaultWidth;
+        $weight = $this->defaultWeight;
+
+        /**
+         * Not use default values.
+         */
+        if (!$this->useDefault) {
+            $length = $this->extractProductData($product, 'volume_comprimento', $length);
+            $height = $this->extractProductData($product, 'volume_altura', $height);
+            $width  = $this->extractProductData($product, 'volume_largura', $width);
+            $weight = $product->getWeight() > 0 ? $product->getWeight() : $weight;
         }
 
-        // Weight calculate
-        if (WeightType::WEIGHT_GR == $this->_weight_type ) {
+        /**
+         * Calculate the weight accordingly to the weight type (grams or kilos).
+         */
+        if (WeightType::WEIGHT_GR == $this->weightType) {
             $weight = $product->getWeight() * 1000;
-        }                
+        }
 
-        $categories = $this->_category->getCategories($product);
+        $categories = $this->categoryRepository->getCategories($product);
 
         $shippingItem = [
             'Weight'    => $weight,
@@ -140,10 +145,25 @@ class ProductRepository implements \MagedIn\Frenet\Api\ProductRepositoryInterfac
             'Quantity'  => $qty,
             'SKU'       => $sku,
             'Category'  => $categories,
-            'isFragile'  => $isFragile
+            'isFragile' => $isFragile
         ];
 
         return $shippingItem;
     }
 
+    /**
+     * @param \Magento\Catalog\Api\Data\ProductInterface $product
+     * @param string                                     $key
+     * @param null|mixed                                 $defaultValue
+     *
+     * @return null|mixed
+     */
+    private function extractProductData(\Magento\Catalog\Api\Data\ProductInterface $product, $key, $defaultValue = null)
+    {
+        if (!$product->getData($key)) {
+            return $defaultValue;
+        }
+
+        return $product->getData($key);
+    }
 }

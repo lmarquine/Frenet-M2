@@ -12,85 +12,108 @@ namespace MagedIn\Frenet\Model;
 class CategoryRepository implements \MagedIn\Frenet\Api\CategoryRepositoryInterface
 {
 
-    protected $logger;
+    /** @var \Psr\Log\LoggerInterface */
+    private $logger;
 
     /**
      * @var \Magento\Catalog\Model\ResourceModel\Category\CollectionFactory
      */
-    protected $_categoryCollectionFactory;
+    private $categoryCollectionFactory;
 
     /**
-     * ServiceRepository constructor.
+     * CategoryRepository constructor.
      *
-     * @param Context $context
+     * @param \Magento\Catalog\Model\ResourceModel\Category\CollectionFactory $categoryCollectionFactory
+     * @param \Psr\Log\LoggerInterface                                        $logger
      */
     public function __construct(
         \Magento\Catalog\Model\ResourceModel\Category\CollectionFactory $categoryCollectionFactory,
         \Psr\Log\LoggerInterface $logger
-    )
-    {
-        $this->_categoryCollectionFactory = $categoryCollectionFactory;
+    ) {
+        $this->categoryCollectionFactory = $categoryCollectionFactory;
         $this->logger = $logger;
-        $this->logger->debug("Frenet category iniciado");        
+        $this->logger->debug("Frenet category iniciado");
     }
 
     /**
      * Get category collection
      *
-     * @param bool $isActive
-     * @param bool|int $level
+     * @param bool        $isActive
+     * @param bool|int    $level
      * @param bool|string $sortBy
-     * @param bool|int $pageSize
-     * @return \Magento\Catalog\Model\ResourceModel\Category\Collection or array
+     * @param bool|int    $pageSize
+     *
+     * @return \Magento\Catalog\Model\ResourceModel\Category\Collection|array
+     *
+     * @throws \Magento\Framework\Exception\LocalizedException
      */
     protected function getCategoryCollection($isActive = true, $level = false, $sortBy = false, $pageSize = false)
     {
-        $collection = $this->_categoryCollectionFactory->create();
-        $collection->addAttributeToSelect('*');        
-        
+        $collection = $this->categoryCollectionFactory->create();
+        $collection->addAttributeToSelect('*');
+
         // select only active categories
         if ($isActive) {
             $collection->addIsActiveFilter();
         }
-                
+
         // select categories of certain level
         if ($level) {
             $collection->addLevelFilter($level);
         }
-        
+
         // sort categories by some value
         if ($sortBy) {
             $collection->addOrderField($sortBy);
         }
-        
+
         // select certain number of categories
         if ($pageSize) {
-            $collection->setPageSize($pageSize); 
-        }    
-        
+            $collection->setPageSize($pageSize);
+        }
+
         return $collection;
-    }    
+    }
 
     /**
-     * @param Magento\Catalog\Model\Product $productObj
-     * 
-     * @return array
+     * {@inheritdoc}
      */
-    public function getCategories($productObj) {
-        $categoryIds = $productObj->getCategoryIds();
+    public function getCategories(\Magento\Catalog\Api\Data\ProductInterface $product)
+    {
+        /** @var \Magento\Catalog\Model\Product $product */
+        $categoryIds = $product->getCategoryIds();
         $result = '';
 
         if (count($categoryIds) > 0) {
-
-            $categories = $this->getCategoryCollection()->addAttributeToFilter('entity_id', $categoryIds);
-            foreach ($categories as $cat) {
-                if(strpos($result, $cat->getName())=== false)
-                    $result .= $cat->getName().'|';
-            }
-    
+            $result = $this->getCategoriesNames($categoryIds);
         }
 
         return $result;
     }
 
+    /**
+     * @param array $categoryIds
+     *
+     * @return null|string
+     */
+    private function getCategoriesNames(array $categoryIds)
+    {
+        $result = null;
+
+        try {
+            $categories = $this->getCategoryCollection()
+                ->addAttributeToFilter('entity_id', $categoryIds);
+
+            /** @var \Magento\Catalog\Api\Data\CategoryInterface $category */
+            foreach ($categories as $category) {
+                if (strpos($result, $category->getName()) === false) {
+                    $result .= $category->getName() . '|';
+                }
+            }
+        } catch (\Magento\Framework\Exception\LocalizedException $e) {
+            $this->logger->critical($e);
+        }
+
+        return $result;
+    }
 }

@@ -5,6 +5,7 @@
  * @copyright Copyright (c) 2018 MagedIn. (http://www.magedin.com)
  *
  * @author    Bruno Gemelli <bruno.gemelli@magedin.com>
+ * @author    Tiago Sampaio <tiago.sampaio@magedin.com>
  */
 
 namespace MagedIn\Frenet\Api;
@@ -13,11 +14,9 @@ interface CategoryRepositoryInterface
 {
 
     /**
-     * @param Magento\Catalog\Model\Product $productObj
+     * @param \Magento\Catalog\Api\Data\ProductInterface $product
      * 
-     * @return array
+     * @return string
      */
-    public function getCategories($productObj);
-
-    
+    public function getCategories(\Magento\Catalog\Api\Data\ProductInterface $product);
 }

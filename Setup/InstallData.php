@@ -116,16 +116,14 @@ class InstallData implements InstallDataInterface
             $input = 'text';
         }
 
-        $productTypes = [
+        $productTypes = implode(',', [
             \Magento\Catalog\Model\Product\Type::TYPE_SIMPLE,
             \Magento\Catalog\Model\Product\Type::TYPE_VIRTUAL,
             \Magento\Downloadable\Model\Product\Type::TYPE_DOWNLOADABLE,
             \Magento\Catalog\Model\Product\Type::TYPE_BUNDLE,
-        ];
+        ]);
 
-        $productTypes = join(',', $productTypes);
-
-        $config = [
+        return [
             'label'                   => $label,
             'default'                 => $defaultValue,
             'note'                    => $description,
@@ -147,8 +145,6 @@ class InstallData implements InstallDataInterface
             'is_visible_in_grid'      => false,
             'is_filterable_in_grid'   => true
         ];
-
-        return $config;
     }
 
     /**
