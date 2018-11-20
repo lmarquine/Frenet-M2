@@ -5,52 +5,47 @@
  * @copyright Copyright (c) 2018 MagedIn. (http://www.magedin.com)
  *
  * @author    Bruno Gemelli <bruno.gemelli@magedin.com>
+ * @author    Tiago Sampaio <tiago.sampaio@magedin.com>
  */
 
 namespace MagedIn\Frenet\Model;
 
 class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterface
 {
-    /**
-     * @var string
-     */
+
+    /** @var \string */
     const API_BASE_URI = 'http://api.frenet.com.br/';
 
-    /**
-     * @var string
-     */
+    /** @var \string */
     const API_SHIPPING_QUOTE_URN = 'shipping/quote';
 
-    /**
-     * @var \Magento\Catalog\Model\ProductRepository
-     */
-    protected $_productRepository;
+    /** @var \string */
+    const CONFIG_TOKEN_XPATH = 'carriers/magedinfrenet/token';
 
-    /**
-     * @var \Magento\Framework\HTTP\ZendClientFactory
-     */
-    protected $_zendClientFactory;
+    /** @var \Magento\Catalog\Model\ProductRepository */
+    protected $productRepository;
 
-    /**
-     * @var \Magento\Framework\App\Config\ScopeConfigInterface
-     */
-    protected $_scopeConfig;
+    /** @var \Magento\Framework\HTTP\ZendClientFactory */
+    protected $zendClientFactory;
 
+    /** @var \Magento\Framework\App\Config\ScopeConfigInterface */
+    protected $scopeConfig;
 
     /**
      * ServiceRepository constructor.
      *
-     * @param Context $context
+     * @param \Magento\Catalog\Model\ProductRepository           $productRepository
+     * @param \Magento\Framework\HTTP\ZendClientFactory          $zendClientFactory
+     * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
      */
     public function __construct(
         \Magento\Catalog\Model\ProductRepository $productRepository,
         \Magento\Framework\HTTP\ZendClientFactory $zendClientFactory,
         \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
-    )
-    {
-        $this->_productRepository = $productRepository;
-        $this->_zendClientFactory = $zendClientFactory;
-        $this->_scopeConfig       = $scopeConfig;
+    ) {
+        $this->productRepository = $productRepository;
+        $this->zendClientFactory = $zendClientFactory;
+        $this->scopeConfig       = $scopeConfig;
     }
 
     /**
@@ -77,9 +72,11 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
             $apiBodyRequest
         );
 
+        /**
+         * 'ShippingSevicesArray' is with an typo but it's the node currently returned from service.
+         */
         if (!isset($response['ShippingSevicesArray'])) {
-            //throw exception?
-            //log?
+            /** @todo Throw exception or/and log it. */
             return null;
         }
 
@@ -98,7 +95,6 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
 
         /** @var \Magento\Quote\Api\Data\CartItemInterface $item */
         foreach ($rateRequest->getAllItems() as $item) {
-
             /**
              * Skip bundle and configurable product types
              */
@@ -107,7 +103,7 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
             }
 
             $hasParent = ($item->getParentItemId()) ? true : false;
-            $product   = $this->_productRepository->getById($item->getProductId());
+            $product   = $this->productRepository->getById($item->getProductId());
 
             $items[] = [
                 'Weight'    => $product->getWeight(),
@@ -127,33 +123,32 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
      * @param string|null $method
      *
      * @return array
+     *
      * @throws \Zend_Http_Client_Exception
      */
     private function request($endpoint, $data, $method = \Zend_Http_Client::POST)
     {
         /** @var \Magento\Framework\HTTP\ZendClient $client */
-        $client = $this->_zendClientFactory->create();
+        $client = $this->zendClientFactory->create();
 
-        $client->setUri(self::API_BASE_URI.$endpoint);
-        $client->setMethod($method);
-        $client->setRawData(json_encode($data), 'application/json');
-        $client->setHeaders(
-            [
+        $client->setUri(self::API_BASE_URI.$endpoint)
+            ->setMethod($method)
+            ->setRawData(json_encode($data), 'application/json')
+            ->setUrlEncodeBody(false)
+            ->setHeaders([
                 'Content-Type' => 'application/json',
                 'token'        => $this->getConfigData('carriers/magedinfrenet/token')
-            ]
-        );
-        $client->setUrlEncodeBody(false);
+            ]);
 
+        /** @var \Zend_Http_Response $response */
         $response = $client->request();
 
         if (!$response->isSuccessful()) {
-            //throw exception?
-            //log?
+            /** @todo Throw exception or/and log it. */
             return null;
         }
 
-        //@todo log??
+        /** @todo Log the result? */
 
         $bodyResponse = json_decode($response->getBody(), true);
 
@@ -161,12 +156,12 @@ class ServiceRepository implements \MagedIn\Frenet\Api\ServiceRepositoryInterfac
     }
     
     /**
-     * @param $path
+     * @param \string $path
      *
      * @return mixed
      */
-    public function getConfigData($path)
+    private function getConfigData($path)
     {
-        return $this->_scopeConfig->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE);
+        return $this->scopeConfig->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE);
     }
 }
