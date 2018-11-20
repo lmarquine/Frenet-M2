@@ -9,57 +9,67 @@
 
 namespace MagedIn\Frenet\Model\Shipping;
 
+use Magento\Framework\HTTP\ZendClientFactory;
+
 class FrenetApi
 {
 
-    protected $logger;
-
-    /**
-     * @var string
-     */
+    /** @var string */
     const API_BASE_URI = 'http://api-hml.frenet.com.br/';
 
-    /**
-     * @var string
-     */
+    /** @var string */
     const API_SHIPPING_QUOTE_URN = 'shipping/quote';
+
+    /** @var string */
+    const ENCODING_TYPE = 'application/json';
+
+    /** @var \Psr\Log\LoggerInterface */
+    private $logger;
 
     /**
      * ServiceRepository constructor.
      *
-     * @param Context $context
+     * @param \Psr\Log\LoggerInterface $logger
      */
-    public function __construct( \Psr\Log\LoggerInterface $logger ) {
+    public function __construct(
+        \Psr\Log\LoggerInterface $logger
+    ) {
         $this->logger = $logger;
-        $this->logger->debug("Frenet API iniciado");
+        $this->logger->debug(__("Frenet API initiated"));
     }
 
     /**
-     * @param string $token
-     * @param array $data
+     * @param string            $token
+     * @param array             $data
+     * @param ZendClientFactory $clientFactory
      *
      * @return array
      * @throws \Zend_Http_Client_Exception
      */
-    public function call( $token, $data, \Magento\Framework\HTTP\ZendClientFactory $zendClientFactory )
-    {   
+    public function call($token, $data, ZendClientFactory $clientFactory)
+    {
+        $method = \Zend_Http_Client::POST;
 
-        $method = \Zend_Http_Client::POST;     
-        $client = $zendClientFactory->create();
+        /** @var \Magento\Framework\HTTP\ZendClient $client */
+        $client = $clientFactory->create();
 
-        $apiUrl = self::API_BASE_URI.self::API_SHIPPING_QUOTE_URN;
-        $client->setUri($apiUrl);
-        $client->setMethod($method);
-
+        $apiUrl   = self::API_BASE_URI.self::API_SHIPPING_QUOTE_URN;
         $jsonBody = json_encode($data);
-        $client->setRawData($jsonBody, 'application/json');
-        $client->setHeaders( [ 'Content-Type' => 'application/json', 'token' => $token ] );
-        $client->setUrlEncodeBody(false);
+
+        $client->setUri($apiUrl)
+            ->setMethod($method)
+            ->setRawData($jsonBody, self::ENCODING_TYPE)
+            ->setUrlEncodeBody(false)
+            ->setHeaders([
+                'Content-Type' => self::ENCODING_TYPE,
+                'token' => $token]
+            );
 
         $this->logger->debug("API Url: ".$apiUrl);
         $this->logger->debug("token: ".$token);
         $this->logger->debug("Request: ".$jsonBody);
 
+        /** @var \Zend_Http_Response $response */
         $response = $client->request();
 
         if (!$response->isSuccessful()) {
@@ -67,6 +77,7 @@ class FrenetApi
             $this->logger->critical("Response: ".$rsObj);
         }
         else {
+            /** @var \string $bodyText */
             $bodyText = $response->getBody();
             $this->logger->debug("Body Response: ".$bodyText);
 
